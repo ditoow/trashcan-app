@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrashScan — App Flow & Components (Realtime Camera)</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0f0a;
+    --surface: #111811;
+    --surface2: #182018;
+    --border: #2a382a;
+    --green: #4ade80;
+    --green-dim: #166534;
+    --green-glow: rgba(74,222,128,0.12);
+    --amber: #fbbf24;
+    --red: #f87171;
+    --blue: #60a5fa;
+    --purple: #c084fc;
+    --text: #e8f5e9;
+    --muted: #6b8c6b;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --display: 'Syne', sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(74,222,128,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(74,222,128,0.05) 0%, transparent 60%);
+    pointer-events: none; z-index: 0;
+  }
+  .wrap { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 48px 24px; }
+
+  /* HEADER */
+  .badge {
+    display: inline-block; font-family: var(--mono); font-size: 11px;
+    color: var(--green); border: 1px solid var(--green-dim);
+    background: var(--green-glow); padding: 4px 12px; border-radius: 2px;
+    letter-spacing: 0.1em; margin-bottom: 20px;
+  }
+  h1 { font-family: var(--display); font-size: clamp(36px,5vw,60px); font-weight: 800; letter-spacing: -2px; line-height: 1; }
+  h1 span { color: var(--green); }
+  .subtitle { margin-top: 12px; font-size: 14px; color: var(--muted); font-weight: 300; }
+  .revision-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 12px; margin-left: 16px;
+    font-family: var(--mono); font-size: 10px;
+    color: var(--amber); border: 1px solid rgba(251,191,36,0.3);
+    background: rgba(251,191,36,0.06); padding: 3px 10px; border-radius: 2px;
+  }
+
+  .section-title {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em;
+    color: var(--green); text-transform: uppercase; margin-bottom: 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ===== FLOW ===== */
+  .flow-wrap { margin-bottom: 64px; }
+  .flow-row {
+    display: flex; align-items: flex-start; gap: 0;
+    overflow-x: auto; padding-bottom: 20px;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  }
+  .flow-step { display: flex; align-items: flex-start; gap: 0; flex-shrink: 0; }
+
+  .flow-card {
+    width: 176px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 18px 14px; position: relative;
+    transition: border-color .2s, box-shadow .2s;
+    animation: fadeUp .4s ease both;
+  }
+  .flow-card:hover { border-color: var(--green-dim); box-shadow: 0 0 20px var(--green-glow); }
+  .flow-card.active { border-color: var(--green); box-shadow: 0 0 24px var(--green-glow); }
+  .flow-card .snum { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-bottom: 8px; }
+  .flow-card .sicon { font-size: 26px; margin-bottom: 8px; display: block; }
+  .flow-card .sname { font-family: var(--display); font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 5px; }
+  .flow-card .sdesc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+  .flow-card .stags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 3px; }
+
+  .tag { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 2px; border: 1px solid; }
+  .tag.g { color: var(--green); border-color: var(--green-dim); background: var(--green-glow); }
+  .tag.a { color: var(--amber); border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.06); }
+  .tag.r { color: var(--red); border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.06); }
+  .tag.b { color: var(--blue); border-color: rgba(96,165,250,0.3); background: rgba(96,165,250,0.06); }
+  .tag.p { color: var(--purple); border-color: rgba(192,132,252,0.3); background: rgba(192,132,252,0.06); }
+
+  .arrow {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 0 10px; padding-top: 36px;
+    color: var(--muted); font-size: 16px; flex-shrink: 0;
+  }
+  .arrow-label { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 3px; text-align: center; max-width: 55px; line-height: 1.3; }
+
+  /* CAMERA DETAIL BOX */
+  .camera-detail {
+    margin-top: 12px;
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .camera-box {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px; animation: fadeUp .4s ease .3s both;
+  }
+  .camera-box-title { font-family: var(--display); font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+  .camera-box ul { list-style: none; }
+  .camera-box ul li { font-size: 11px; color: var(--muted); padding: 4px 0; display: flex; gap: 8px; align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .camera-box ul li:last-child { border-bottom: none; }
+  .camera-box ul li .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); margin-top: 5px; flex-shrink: 0; }
+  .camera-box ul li span { color: var(--text); }
+
+  /* LOOP DIAGRAM */
+  .loop-wrap { margin-top: 16px; margin-bottom: 64px; }
+  .loop-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 24px; overflow-x: auto;
+    animation: fadeUp .4s ease .2s both;
+  }
+  .loop-title { font-family: var(--display); font-size: 14px; font-weight: 700; margin-bottom: 20px; color: var(--text); }
+  .loop-steps {
+    display: flex; align-items: center; gap: 0;
+    min-width: max-content;
+  }
+  .ls {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px; width: 120px;
+  }
+  .ls-box {
+    width: 100%; padding: 10px 8px; text-align: center;
+    border-radius: 6px; border: 1px solid;
+    font-size: 11px; line-height: 1.4;
+  }
+  .ls-box.loop-g { border-color: var(--green-dim); background: var(--green-glow); color: var(--green); }
+  .ls-box.loop-b { border-color: rgba(96,165,250,0.3); background: rgba(96,165,250,0.06); color: var(--blue); }
+  .ls-box.loop-a { border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.06); color: var(--amber); }
+  .ls-box.loop-r { border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.06); color: var(--red); }
+  .ls-label { font-family: var(--mono); font-size: 9px; color: var(--muted); text-align: center; }
+  .loop-arr { color: var(--muted); font-size: 18px; padding: 0 6px; flex-shrink: 0; margin-bottom: 16px; }
+  .loop-skip {
+    font-family: var(--mono); font-size: 9px; color: var(--amber);
+    margin-top: -10px; text-align: center; width: 120px;
+  }
+
+  /* DIVIDER */
+  .divider { height: 1px; background: var(--border); margin: 40px 0; }
+
+  /* COMPONENT GRID */
+  .comp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; margin-bottom: 64px; }
+  .comp-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+    animation: fadeUp .4s ease both; transition: border-color .2s;
+  }
+  .comp-card:hover { border-color: var(--green-dim); }
+  .comp-head {
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .comp-ico {
+    width: 34px; height: 34px; border-radius: 6px;
+    background: var(--green-glow); border: 1px solid var(--green-dim);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  .comp-name { font-family: var(--display); font-size: 14px; font-weight: 700; color: var(--text); }
+  .comp-path { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .comp-body { padding: 14px 18px; }
+  .comp-desc { font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 12px; }
+  .prop-list { list-style: none; }
+  .prop-list li { display: flex; gap: 8px; font-size: 11px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .prop-list li:last-child { border-bottom: none; }
+  .pn { font-family: var(--mono); color: var(--blue); min-width: 160px; flex-shrink: 0; }
+  .pt { font-family: var(--mono); color: var(--amber); min-width: 80px; flex-shrink: 0; }
+  .pd { color: var(--muted); line-height: 1.4; }
+
+  /* MODELS */
+  .model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-bottom: 64px; }
+  .model-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px; animation: fadeUp .4s ease both; }
+  .model-name { font-family: var(--display); font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+  .model-path { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-bottom: 12px; }
+  .model-fields { list-style: none; }
+  .model-fields li { font-family: var(--mono); font-size: 10px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; gap: 8px; }
+  .model-fields li:last-child { border-bottom: none; }
+  .mfn { color: var(--green); min-width: 160px; }
+  .mft { color: var(--amber); }
+
+  /* API */
+  .api-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 22px; font-family: var(--mono);
+    font-size: 12px; margin-bottom: 64px; animation: fadeUp .4s ease both;
+  }
+  .am { color: var(--green); }
+  .au { color: var(--text); }
+  .ak { color: var(--blue); }
+  .av { color: var(--amber); }
+  .ac { color: var(--muted); }
+  .ablock { margin: 10px 0; padding: 12px 14px; background: #0d140d; border-radius: 6px; line-height: 1.9; }
+
+  footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <header style="margin-bottom:56px">
+    <div class="badge">// PRD · FLOW & COMPONENT SPEC · v1.1 — REALTIME CAMERA</div>
+    <div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:0">
+      <h1>Trash<span>Scan</span></h1>
+      <span class="revision-pill">⚡ Revisi: Upload → Realtime Camera</span>
+    </div>
+    <p class="subtitle">Flutter · Continuous frame capture · Hugging Face Inference API · Target semua usia</p>
+  </header>
+
+  <!-- ===== FLOW ===== -->
+  <div class="flow-wrap">
+    <div class="section-title">01 — App Flow</div>
+
+    <div class="flow-row">
+
+      <div class="flow-step">
+        <div class="flow-card">
+          <div class="snum">SCREEN 01</div>
+          <span class="sicon">🌿</span>
+          <div class="sname">Splash Screen</div>
+          <div class="sdesc">Logo + animasi. Auto-redirect ke Onboarding atau Permission.</div>
+          <div class="stags"><span class="tag g">stateless</span><span class="tag a">2s</span></div>
+        </div>
+        <div class="arrow">→<div class="arrow-label">auto 2s</div></div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-card">
+          <div class="snum">SCREEN 02</div>
+          <span class="sicon">📖</span>
+          <div class="sname">Onboarding</div>
+          <div class="sdesc">2 slide cara kerja app. Hanya saat pertama install.</div>
+          <div class="stags"><span class="tag a">first-run</span></div>
+        </div>
+        <div class="arrow">→<div class="arrow-label">tap mulai</div></div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-card">
+          <div class="snum">SCREEN 03</div>
+          <span class="sicon">🔐</span>
+          <div class="sname">Permission</div>
+          <div class="sdesc">Minta izin kamera. Jika ditolak: screen info + tombol buka pengaturan.</div>
+          <div class="stags"><span class="tag r">required</span></div>
+        </div>
+        <div class="arrow">→<div class="arrow-label">granted</div></div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-card active">
+          <div class="snum">SCREEN 04 — CORE</div>
+          <span class="sicon">📷</span>
+          <div class="sname">Camera + Overlay</div>
+          <div class="sdesc">Live camera fullscreen. Overlay hasil klasifikasi di atas feed. Loop capture tiap 2 detik.</div>
+          <div class="stags">
+            <span class="tag g">core</span>
+            <span class="tag p">continuous</span>
+            <span class="tag b">overlay</span>
+          </div>
+        </div>
+        <div class="arrow">→<div class="arrow-label">tap hasil</div></div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-card">
+          <div class="snum">SHEET 01</div>
+          <span class="sicon">💡</span>
+          <div class="sname">Education Bottom Sheet</div>
+          <div class="sdesc">Detail edukasi hasil terakhir. Loop di-pause saat sheet terbuka.</div>
+          <div class="stags"><span class="tag b">modal</span><span class="tag a">pause loop</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Camera screen detail -->
+    <div class="camera-detail">
+      <div class="camera-box">
+        <div class="camera-box-title">📷 Camera Screen — Layer Stack</div>
+        <ul>
+          <li><div class="dot"></div><div><span>CameraPreview</span> — fullscreen, 16:9, layer paling bawah</div></li>
+          <li><div class="dot"></div><div><span>ResultOverlay</span> — positioned bottom, label + kategori + confidence bar</div></li>
+          <li><div class="dot"></div><div><span>StatusIndicator</span> — pojok kiri atas, pulse dot saat request aktif</div></li>
+          <li><div class="dot"></div><div><span>PauseButton</span> — pojok kanan atas, FAB kecil</div></li>
+          <li><div class="dot"></div><div><span>InfoButton</span> — pojok kanan bawah, buka bottom sheet</div></li>
+        </ul>
+      </div>
+      <div class="camera-box">
+        <div class="camera-box-title">⚡ Error & Edge Case Paths</div>
+        <ul>
+          <li><div class="dot"></div><div><span>Tidak ada koneksi</span> → Snackbar error, loop tetap jalan (akan retry interval berikutnya)</div></li>
+          <li><div class="dot"></div><div><span>API timeout (5s)</span> → Skip frame, log error, lanjut loop</div></li>
+          <li><div class="dot"></div><div><span>503 cold start</span> → Pause loop, banner "Model dimuat...", resume setelah estimated_time</div></li>
+          <li><div class="dot"></div><div><span>Request pending</span> → Skip frame (flag _isRequesting)</div></li>
+          <li><div class="dot"></div><div><span>Kamera izin ditolak</span> → PermissionDeniedScreen khusus</div></li>
+          <li><div class="dot"></div><div><span>App background</span> → Loop auto-pause via WidgetsBindingObserver</div></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CAPTURE LOOP ===== -->
+  <div class="loop-wrap">
+    <div class="section-title">02 — Continuous Capture Loop</div>
+    <div class="loop-box">
+      <div class="loop-title">Timer.periodic(2 detik) — Throttle Logic</div>
+      <div class="loop-steps">
+
+        <div class="ls">
+          <div class="ls-box loop-g">Timer<br>tick</div>
+          <div class="ls-label">setiap 2s</div>
+        </div>
+        <div class="loop-arr">→</div>
+
+        <div class="ls">
+          <div class="ls-box loop-a">_isRequesting<br>?</div>
+          <div class="ls-label">cek flag</div>
+          <div class="loop-skip">YA → skip frame</div>
+        </div>
+        <div class="loop-arr">→ TIDAK</div>
+
+        <div class="ls">
+          <div class="ls-box loop-b">Capture<br>frame</div>
+          <div class="ls-label">camera.takePicture()</div>
+        </div>
+        <div class="loop-arr">→</div>
+
+        <div class="ls">
+          <div class="ls-box loop-b">Compress<br>&lt; 300KB</div>
+          <div class="ls-label">flutter_image_compress</div>
+        </div>
+        <div class="loop-arr">→</div>
+
+        <div class="ls">
+          <div class="ls-box loop-b">POST ke<br>HF API</div>
+          <div class="ls-label">_isRequesting = true</div>
+        </div>
+        <div class="loop-arr">→</div>
+
+        <div class="ls">
+          <div class="ls-box loop-g">Update<br>Overlay</div>
+          <div class="ls-label">_isRequesting = false</div>
+        </div>
+        <div class="loop-arr">↺</div>
+
+        <div class="ls">
+          <div class="ls-box loop-r">Error?<br>Skip</div>
+          <div class="ls-label">timeout/error → false</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ===== COMPONENTS ===== -->
+  <div class="section-title">03 — Component List</div>
+  <div class="comp-grid">
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-ico">🌿</div>
+        <div><div class="comp-name">SplashScreen</div><div class="comp-path">lib/features/splash/splash_screen.dart</div></div>
+      </div>
+      <div class="comp-body">
+        <div class="comp-desc">Logo + tagline animasi. Cek SharedPreferences: arahkan ke OnboardingScreen (first run) atau PermissionScreen.</div>
+        <ul class="prop-list">
+          <li><span class="pn">_checkFirstRun()</span><span class="pt">Future</span><span class="pd">Cek key 'onboarding_done'</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-ico">📖</div>
+        <div><div class="comp-name">OnboardingScreen</div><div class="comp-path">lib/features/onboarding/onboarding_screen.dart</div></div>
+      </div>
+      <div class="comp-body">
+        <div class="comp-desc">PageView 2 slide. Slide 2 punya tombol "Mulai" → set flag → navigate ke PermissionScreen.</div>
+        <ul class="prop-list">
+          <li><span class="pn">_currentPage</span><span class="pt">int</span><span class="pd">Index slide aktif</span></li>
+          <li><span class="pn">_onFinish()</span><span class="pt">void</span><span class="pd">Simpan flag, navigate</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-ico">🔐</div>
+        <div><div class="comp-name">PermissionScreen</div><div class="comp-path">lib/features/permission/permission_screen.dart</div></div>
+      </div>
+      <div class="comp-body">
+        <div class="comp-desc">Minta izin kamera via permission_handler. Jika granted → CameraScreen. Jika denied → tampilkan PermissionDeniedView dengan tombol buka Settings.</div>
+        <ul class="prop-list">
+          <li><span class="pn">_requestPermission()</span><span class="pt">Future</span><span class="pd">Trigger permission dialog</span></li>
+          <li><span class="pn">_openSettings()</span><span class="pt">void</span><span class="pd">openAppSettings()</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="comp-card" style="border-color: var(--green-dim);">
+      <div class="comp-head">
+        <div class="comp-ico">📷</div>
+        <div><div class="comp-name">CameraScreen</div><div class="comp-path">lib/features/camera/camera_screen.dart</div></div>
+      </div>
+      <div class="comp-body">
+        <div class="comp-desc">Screen utama. Inisialisasi CameraController, jalankan capture loop via Timer.periodic. Stack: CameraPreview + ResultOverlay + StatusIndicator + kontrol buttons.</div>
+        <ul class="prop-list">
+          <li><span class="pn">_controller</span><span class="pt">CameraController</span><span class="pd">Manage camera lifecycle</span></li>
+          <li><span class="pn">_captureTimer</span><span class="pt">Timer?</span><span class="pd">Timer.periodic 2 detik</span></li>
+          <li><span class="pn">_isRequesting</span><span class="pt">bool</span><span class="pd">Flag throttle, cegah request tumpang tindih</span></li>
+          <li><span class="pn">_isPaused</span><span class="pt">bool</span><span class="pd">State pause/resume loop</span></li>
+          <li><span class="pn">_startLoop()</span><span class="pt">void</span><span class="pd">Inisialisasi Timer.periodic</span></li>
+          <li><span class="pn">_stopLoop()</span><span class="pt">void</span><span class="pd">Cancel timer, cleanup</span></li>
+          <li><span class="pn">_captureAndAnalyze()</span><span class="pt">Future</span><span class="pd">Capture → compress → POST → update state</span></li>
+          <li><span class="pn">didChangeAppLifecycleState()</span><span class="pt">override</span><span class="pd">Pause loop saat background, resume saat foreground</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-ico">🎯</div>
+        <div><div class="comp-name">ResultOverlay</div><div class="comp-path">lib/features/camera/widgets/result_overlay.dart</div></div>
+      </div>
+      <div class="comp-body">
+        <div class="comp-desc">Overlay transparan di atas CameraPreview (Positioned bottom). Menampilkan label, kategori chip, confidence bar. Update animasi setiap ada result baru. Tap → buka education sheet.</div>
+        <ul class="prop-list">
+          <li><span class="pn">result</span><span class="pt">ScanResult?</span><span class="pd">Null = tampil placeholder teks</span></li>
+          <li><span class="pn">isLoading</span><span class="pt">bool</span><span class="pd">Tampil pulse indicator</span></li>
+          <li><span class="pn">onTap</span><span class="pt">VoidCallback</span><span class="pd">Buka education bottom sheet</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-ico">📊</div>
+        <div><div class="comp-name">ConfidenceBar</div><div class="comp-path">lib/features/camera/widgets/confidence_bar.dart</div></div>
+      </div>
+      <div class="comp-body">
+        <div class="comp-desc">Progress bar animasi di dalam overlay. Warna: hijau ≥0.7, kuning 0.4–0.7, merah &lt;0.4. Animasi smooth setiap update nilai baru via AnimatedContainer.</div>
+        <ul class="prop-list">
+          <li><span class="pn">score</span><span class="pt">double</span><span class="pd">0.0 – 1.0</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-ico">⏸️</div>
+        <div><div class="comp-name">PauseResumeButton</div><div class="comp-path">lib/features/camera/widgets/pause_resume_button.dart</div></div>
+      </div>
+      <div class="comp-body">
+        <div class="comp-desc">FAB semi-transparan di pojok kanan atas. Toggle ikon pause/play. Pause menghentikan Timer tanpa menutup kamera.</div>
+        <ul class="prop-list">
+          <li><span class="pn">isPaused</span><span class="pt">bool</span><span class="pd">Kontrol ikon yang ditampilkan</span></li>
+          <li><span class="pn">onToggle</span><span class="pt">VoidCallback</span><span class="pd">Toggle _isPaused di CameraScreen</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-ico">🔴</div>
+        <div><div class="comp-name">StatusIndicator</div><div class="comp-path">lib/features/camera/widgets/status_indicator.dart</div></div>
+      </div>
+      <div class="comp-body">
+        <div class="comp-desc">Dot kecil di pojok kiri atas. Hijau berkedip = scanning aktif. Abu = paused. Kuning = loading request. Merah = error terakhir.</div>
+        <ul class="prop-list">
+          <li><span class="pn">status</span><span class="pt">ScanStatus</span><span class="pd">Enum: scanning, paused, loading, error</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-ico">💡</div>
+        <div><div class="comp-name">EducationBottomSheet</div><div class="comp-path">lib/features/camera/widgets/education_bottom_sheet.dart</div></div>
+      </div>
+      <div class="comp-body">
+        <div class="comp-desc">Modal bottom sheet. Tampil saat user tap overlay. Loop di-pause saat terbuka, resume saat ditutup. Konten dari local JSON sesuai kategori.</div>
+        <ul class="prop-list">
+          <li><span class="pn">result</span><span class="pt">ScanResult</span><span class="pd">Hasil terakhir sebagai konteks</span></li>
+          <li><span class="pn">onClose</span><span class="pt">VoidCallback</span><span class="pd">Resume loop saat sheet tutup</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-ico">🧠</div>
+        <div><div class="comp-name">ScanProvider</div><div class="comp-path">lib/features/camera/providers/scan_provider.dart</div></div>
+      </div>
+      <div class="comp-body">
+        <div class="comp-desc">ChangeNotifier yang menyimpan state hasil scan, loading, error, dan status. Dipanggil oleh CameraScreen setiap frame capture selesai diproses.</div>
+        <ul class="prop-list">
+          <li><span class="pn">latestResult</span><span class="pt">ScanResult?</span><span class="pd">Hasil klasifikasi terakhir</span></li>
+          <li><span class="pn">status</span><span class="pt">ScanStatus</span><span class="pd">scanning/paused/loading/error</span></li>
+          <li><span class="pn">errorMessage</span><span class="pt">String?</span><span class="pd">Pesan error terakhir</span></li>
+          <li><span class="pn">updateResult()</span><span class="pt">void</span><span class="pd">Set result + notifyListeners</span></li>
+          <li><span class="pn">setStatus()</span><span class="pt">void</span><span class="pd">Update status + notifyListeners</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-ico">🤗</div>
+        <div><div class="comp-name">HuggingFaceService</div><div class="comp-path">lib/core/services/huggingface_service.dart</div></div>
+      </div>
+      <div class="comp-body">
+        <div class="comp-desc">Service class HTTP ke HF Inference API. Terima bytes frame, compress, POST, parse response. Timeout 5 detik per request.</div>
+        <ul class="prop-list">
+          <li><span class="pn">classify(imageBytes)</span><span class="pt">Future&lt;List&lt;HFPrediction&gt;&gt;</span><span class="pd">Kirim frame, return prediksi</span></li>
+          <li><span class="pn">_compress(bytes)</span><span class="pt">Future&lt;Uint8List&gt;</span><span class="pd">Target &lt;300KB</span></li>
+          <li><span class="pn">_parseResponse(json)</span><span class="pt">List&lt;HFPrediction&gt;</span><span class="pd">Parse array label + score</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-head">
+        <div class="comp-ico">🗺️</div>
+        <div><div class="comp-name">WasteCategoryMapper</div><div class="comp-path">lib/core/utils/waste_category_mapper.dart</div></div>
+      </div>
+      <div class="comp-body">
+        <div class="comp-desc">Map label API → WasteCategory enum + nama Indonesia. File ini yang diupdate tiap kali label dari model berubah.</div>
+        <ul class="prop-list">
+          <li><span class="pn">fromLabel(label)</span><span class="pt">WasteCategory</span><span class="pd">Return enum dari string label</span></li>
+          <li><span class="pn">toDisplayName(label)</span><span class="pt">String</span><span class="pd">Label dalam Bahasa Indonesia</span></li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ===== MODELS ===== -->
+  <div class="section-title">04 — Data Models</div>
+  <div class="model-grid">
+    <div class="model-card">
+      <div class="model-name">ScanResult</div>
+      <div class="model-path">lib/core/models/scan_result.dart</div>
+      <ul class="model-fields">
+        <li><span class="mfn">topLabel</span><span class="mft">String</span></li>
+        <li><span class="mfn">topScore</span><span class="mft">double</span></li>
+        <li><span class="mfn">category</span><span class="mft">WasteCategory</span></li>
+        <li><span class="mfn">displayName</span><span class="mft">String</span></li>
+        <li><span class="mfn">allPredictions</span><span class="mft">List&lt;HFPrediction&gt;</span></li>
+        <li><span class="mfn">capturedAt</span><span class="mft">DateTime</span></li>
+      </ul>
+    </div>
+    <div class="model-card">
+      <div class="model-name">HFPrediction</div>
+      <div class="model-path">lib/core/models/hf_prediction.dart</div>
+      <ul class="model-fields">
+        <li><span class="mfn">label</span><span class="mft">String</span></li>
+        <li><span class="mfn">score</span><span class="mft">double</span></li>
+        <li><span class="mfn">fromJson()</span><span class="mft">factory</span></li>
+      </ul>
+    </div>
+    <div class="model-card">
+      <div class="model-name">WasteCategory</div>
+      <div class="model-path">lib/core/models/waste_category.dart</div>
+      <ul class="model-fields">
+        <li><span class="mfn">organic</span><span class="mft">enum</span></li>
+        <li><span class="mfn">inorganic</span><span class="mft">enum</span></li>
+        <li><span class="mfn">b3</span><span class="mft">enum</span></li>
+        <li><span class="mfn">unknown</span><span class="mft">enum</span></li>
+      </ul>
+    </div>
+    <div class="model-card">
+      <div class="model-name">ScanStatus</div>
+      <div class="model-path">lib/core/models/scan_status.dart</div>
+      <ul class="model-fields">
+        <li><span class="mfn">scanning</span><span class="mft">enum</span></li>
+        <li><span class="mfn">loading</span><span class="mft">enum</span></li>
+        <li><span class="mfn">paused</span><span class="mft">enum</span></li>
+        <li><span class="mfn">error</span><span class="mft">enum</span></li>
+        <li><span class="mfn">coldStart</span><span class="mft">enum</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ===== API ===== -->
+  <div class="section-title">05 — API Contract</div>
+  <div class="api-card">
+    <div><span class="am">POST</span> <span class="au">https://api-inference.huggingface.co/models/{MODEL_NAME}</span></div>
+    <div class="ablock">
+      <span class="ac">// Headers</span><br>
+      <span class="ak">Authorization</span>: <span class="av">Bearer $HF_API_TOKEN</span><br>
+      <span class="ak">Content-Type</span>: <span class="av">application/octet-stream</span>
+    </div>
+    <div class="ablock">
+      <span class="ac">// Body — raw compressed frame bytes (&lt;300KB)</span><br>
+      <span class="av">[binary image data dari camera capture]</span>
+    </div>
+    <div class="ablock">
+      <span class="ac">// Response 200 OK</span><br>
+      [<br>
+      &nbsp;&nbsp;{ <span class="ak">"label"</span>: <span class="av">"plastic"</span>, <span class="ak">"score"</span>: <span class="av">0.92</span> },<br>
+      &nbsp;&nbsp;{ <span class="ak">"label"</span>: <span class="av">"organic"</span>, <span class="ak">"score"</span>: <span class="av">0.05</span> }<br>
+      ]<br>
+      <span class="ac">// → ambil index [0] (score tertinggi) sebagai topLabel</span>
+    </div>
+    <div class="ablock">
+      <span class="ac">// Response 503 — model cold start</span><br>
+      { <span class="ak">"error"</span>: <span class="av">"Model is loading"</span>, <span class="ak">"estimated_time"</span>: <span class="av">20.0</span> }<br>
+      <span class="ac">// → pause loop, status = coldStart, resume setelah estimated_time</span>
+    </div>
+    <div class="ablock">
+      <span class="ac">// Timeout: 5 detik per request</span><br>
+      <span class="ac">// On timeout/error: skip frame, _isRequesting = false, lanjut loop</span><br>
+      <span class="ac">// Tidak ada retry langsung — tunggu interval berikutnya (2s)</span>
+    </div>
+  </div>
+
+  <footer>
+    <span>TrashScan · Flow & Component Spec · v1.1 · Realtime Camera</span>
+    <span>Flutter · camera package · HuggingFace API</span>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,29 @@
+#!/bin/bash
+# Flutter run helper — usage: ./run hp | ./run iphone | ./run android | ./run build | ./run <flags>
+set -euo pipefail
+
+case "${1:-}" in
+  hp|phone|iphone)
+    shift
+    exec flutter run -d "00008120-000A2D0E2E46601E" "$@"
+    ;;
+  android)
+    shift
+    exec flutter run -d android "$@"
+    ;;
+  build)
+    shift
+    exec flutter build ios --release --no-codesign "$@"
+    ;;
+  release)
+    shift
+    exec flutter run --release -d "00008120-000A2D0E2E46601E" "$@"
+    ;;
+  chrome|web)
+    shift
+    exec flutter run -d chrome "$@"
+    ;;
+  *)
+    exec flutter run "$@"
+    ;;
+esac
